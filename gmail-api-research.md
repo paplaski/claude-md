@@ -6,10 +6,12 @@ There are **4 main approaches** to safely access Gmail, ordered by ease of use:
 
 | Approach | Provider | Auth Method | Read | Write/Send | Best For |
 |----------|----------|-------------|------|------------|----------|
-| Claude Google Workspace Connector | Anthropic (built-in) | OAuth via Claude UI | Yes | Yes (draft) | Claude Desktop/Web users |
-| Google's Official Gmail MCP Server | Google | OAuth 2.0 | Yes | Yes | Claude Code / MCP-compatible tools |
-| Community Gmail MCP Servers | Third-party | OAuth 2.0 | Yes | Yes | Claude Code with custom setup |
+| Claude Google Workspace Connector | Anthropic (built-in) | OAuth via Claude UI | Yes | Drafts only (no send) | Claude Desktop/Web users |
+| Community Google Workspace MCP Servers | Community | OAuth 2.0 | Yes | Yes | Claude Code / MCP-compatible tools |
+| Third-party MCP Platforms | Composio/Zapier | OAuth 2.0 (managed) | Yes | Yes | No-code / quick setup |
 | Gmail API Directly | Google | OAuth 2.0 | Yes | Yes | Custom applications |
+
+**Important clarification:** Google's official MCP servers (March 2026) currently cover **Cloud services only** (BigQuery, GKE, Maps) — **not Gmail/Workspace**. There is no official Google Gmail MCP server yet. For MCP-based Gmail access, community servers are the current option.
 
 ---
 
@@ -19,8 +21,14 @@ Anthropic offers **official Google Workspace connectors** built into Claude (cla
 
 ### What It Supports
 - **Search and read emails** using natural language
-- **Draft emails** with proper formatting and context
+- **Create drafts** with proper formatting and context (user must manually send)
 - **Google Calendar** and **Google Drive** access also available
+- Available on **Max, Team, Enterprise, and Pro plans**
+
+### What It Cannot Do
+- **Cannot send emails** — all sends must be done manually by the user
+- **Cannot access attachment content** (metadata only)
+- **Cannot see embedded images**
 
 ### How to Set Up
 1. Go to **claude.ai** → Settings → Integrations (or Claude Desktop → Settings)
@@ -31,51 +39,88 @@ Anthropic offers **official Google Workspace connectors** built into Claude (cla
 ### Security Notes
 - Uses Google's standard OAuth 2.0 consent flow
 - Anthropic acts as the OAuth client — your credentials are never shared with Claude directly
+- Anthropic does **not** train models on connector data
+- Connections are authenticated per-user with strict access controls
 - You can revoke access at any time from Google Account → Security → Third-party apps
 - Data is handled per Anthropic's privacy policy
 
 ### Limitations
 - Only available in Claude web (claude.ai) and Claude Desktop — **not available in Claude Code CLI**
 - Cannot run fully automated/programmatic workflows
+- Cannot send emails directly (drafts only)
 
 **Reference:** https://support.claude.com/en/articles/10166901-use-google-workspace-connectors
 
 ---
 
-## Option 2: Google's Official MCP Server for Gmail
+## Option 2: Google's Official MCP Servers (Status Update)
 
-Google has released **official MCP (Model Context Protocol) servers** for their Workspace products including Gmail.
+Google announced official MCP server support in early 2026. However, these currently cover **Google Cloud services only**:
 
-### Google Workspace MCP Server
-- **Repository:** `github.com/nichochar/google-mcp` (Google-endorsed) and Google's own toolbox (`github.com/googleapis/genai-toolbox`)
-- **Supported services:** Gmail, Google Calendar, Google Drive, Google Docs
-- **Auth:** OAuth 2.0 with Google Cloud project credentials
+### Currently Available (Google Official)
+- **Maps / Grounding Lite** — geospatial, places, weather, routing
+- **BigQuery** — schema interpretation, query execution
+- **GKE** — Kubernetes cluster management
 
-### Setup for Claude Code
+### Planned (No Timeline for Gmail)
+- Cloud Run, Cloud Storage, Cloud Resource Manager, AlloyDB, Cloud SQL, Spanner, Looker, Pub/Sub, Dataplex
+
+**Gmail/Workspace is NOT yet covered** by Google's official MCP servers. For MCP-based Gmail access, see the community options below.
+
+---
+
+## Option 3: Community Google Workspace MCP Servers (Best for Claude Code)
+
+Since there is no official Google Gmail MCP server yet, community-built servers are the primary option for Claude Code users.
+
+### Top Options
+
+1. **taylorwilsdon/google_workspace_mcp** (Most Feature-Complete)
+   - Covers Gmail, Drive, Docs, Sheets, Calendar, Slides, Chat, Forms, Tasks, Contacts (12 services, 100+ tools)
+   - Supports OAuth 2.1, multi-user remote hosting
+   - One-click Claude Desktop installation
+   - Website: workspacemcp.com
+
+2. **GongRzhe/Gmail-MCP-Server** (Gmail-Specific)
+   - Focused Gmail MCP server for Claude Desktop
+   - Auto-authentication support
+   - Supports sending, reading, and searching emails
+
+3. **j3k0/mcp-google-workspace** (Lightweight)
+   - Node.js MCP server for Gmail and Calendar
+   - Install via `npx mcp-google-workspace`
+
+4. **MarkusPfundstein/mcp-gsuite**
+   - Gmail and Calendar MCP server
+   - Flexible search and batch retrieval
+
+### Setup for Claude Code (Example with community server)
 1. **Create a Google Cloud Project** at https://console.cloud.google.com
 2. **Enable the Gmail API** in your project
 3. **Create OAuth 2.0 credentials** (Desktop application type)
 4. **Download** the `credentials.json` file
-5. **Install and configure** the MCP server:
+5. **Install and configure** the MCP server in your Claude Code settings:
 
 ```json
-// In your Claude Code MCP settings (~/.claude/settings.json or project .mcp.json)
+// In ~/.claude/settings.json or project .mcp.json
 {
   "mcpServers": {
-    "gmail": {
+    "google-workspace": {
       "command": "npx",
-      "args": ["-y", "@anthropic-ai/google-workspace-mcp"],
+      "args": ["-y", "mcp-google-workspace"],
       "env": {
         "GOOGLE_CLIENT_ID": "<your-client-id>",
-        "GOOGLE_CLIENT_SECRET": "<your-client-secret>",
-        "GOOGLE_REDIRECT_URI": "http://localhost:3000/oauth/callback"
+        "GOOGLE_CLIENT_SECRET": "<your-client-secret>"
       }
     }
   }
 }
 ```
 
-> **Note:** Verify the exact package name at the time of setup. The MCP ecosystem is evolving rapidly. Check https://github.com/modelcontextprotocol/servers for the latest official server list.
+> **Note:** Verify the exact package name and configuration for whichever server you choose. The MCP ecosystem is evolving rapidly.
+
+### MCP Security Warning
+Between January and February 2026, security researchers filed **over 30 CVEs** targeting MCP servers, clients, and infrastructure — primarily due to missing input validation, absent authentication, and blind trust in tool descriptions. **Always audit community MCP server code before granting it access to your email.**
 
 ### Gmail API Scopes (Least Privilege)
 
@@ -95,36 +140,19 @@ Google has released **official MCP (Model Context Protocol) servers** for their 
 
 ---
 
-## Option 3: Community MCP Servers for Gmail
+## Option 4: Third-Party MCP Platforms (Managed)
 
-Several well-maintained community MCP servers exist:
+For simpler setup without self-hosting:
 
-### Notable Options
+1. **Composio Gmail MCP** — Managed OAuth2, handles token refresh automatically (composio.dev)
+2. **Zapier Gmail MCP** — No-code setup, connects Gmail through Zapier's platform
+3. **Merge** — Email MCP servers supporting Gmail, Outlook, and other providers
 
-1. **GongRzhe/Gmail-MCP-Server** (GitHub)
-   - Open-source, popular
-   - Auto-authentication support
-   - Supports read, send, search, label management
-
-2. **Composio Gmail MCP**
-   - Managed OAuth2 — handles token refresh automatically
-   - Easier setup than self-hosted
-   - https://composio.dev/toolkits/gmail/framework/claude-code
-
-3. **Zapier Gmail MCP**
-   - No-code setup
-   - Connects Gmail actions through Zapier's platform
-   - Good for simple automations
-
-### Security Considerations for Community Servers
-- **Review the source code** before using any community MCP server
-- Ensure the server doesn't store or transmit your OAuth tokens to third parties
-- Prefer servers with active maintenance and community review
-- Check that tokens are stored locally, not on remote servers
+These platforms handle OAuth and token management for you, but your data flows through their servers.
 
 ---
 
-## Option 4: Gmail API Directly (For Custom Applications)
+## Option 5: Gmail API Directly (For Custom Applications)
 
 If you're building your own application or script to access Gmail.
 
@@ -209,7 +237,14 @@ npm install googleapis @google-cloud/local-auth
 
 ## Security Best Practices
 
-### Authentication
+### Authentication Methods Comparison
+
+| Method | Use Case | Gmail Compatible? |
+|--------|----------|-------------------|
+| **OAuth 2.0 (user consent)** | Apps acting on behalf of a user | Yes — the standard and recommended method |
+| **Service Accounts** | Server-to-server, no user interaction | Only with Google Workspace + domain-wide delegation |
+| **API Keys** | Public data access only | **No** — Gmail requires authentication |
+
 - **Always use OAuth 2.0** — never use API keys for Gmail (API keys don't work for user data)
 - **Never use service accounts** for personal Gmail — service accounts are for Google Workspace domain-wide delegation only
 - Store `credentials.json` and `token.json` securely — **never commit them to git**
@@ -227,10 +262,13 @@ npm install googleapis @google-cloud/local-auth
 - Review and audit granted scopes periodically
 
 ### Token Management
-- OAuth tokens include a **refresh token** — treat it like a password
-- Store tokens in a secure location (encrypted storage, OS keychain, or environment variables)
+- **Access tokens** expire after ~1 hour — treat them as short-lived API keys
+- **Refresh tokens** are long-lived and can mint new access tokens — **treat them like passwords**
+- Store tokens encrypted at rest (Google Cloud Secret Manager, OS keychains, or hardware security modules)
+- Never commit tokens to source control or transmit in plaintext
+- Refresh tokens stop working if: user revokes access, token unused for 6 months, or user changes password
+- There is a limit of **100 refresh tokens** per Google Account per OAuth client
 - Implement token rotation and revocation capabilities
-- Set token expiry handling in your code
 
 ### Application Verification
 - For apps accessing >100 users, Google requires **OAuth app verification**
@@ -253,13 +291,23 @@ npm install googleapis @google-cloud/local-auth
 | Use Case | Recommended Approach |
 |----------|---------------------|
 | Casual email access with Claude | **Option 1:** Claude Workspace Connector |
-| Claude Code / automated workflows | **Option 2:** Google's Official MCP Server |
-| Quick integration, minimal setup | **Option 3:** Composio or Zapier MCP |
-| Custom application development | **Option 4:** Gmail API directly |
+| Claude Code / automated workflows | **Option 3:** Community Workspace MCP (e.g., taylorwilsdon) |
+| Quick integration, minimal setup | **Option 4:** Composio or Zapier MCP |
+| Custom application development | **Option 5:** Gmail API directly |
+| Enterprise / organizational use | Service accounts with domain-wide delegation, or wait for Google's official Workspace MCP |
 
-For most users, **start with Option 1** (Claude's built-in connector) if you're using Claude Desktop or claude.ai. If you need programmatic access in Claude Code, **Option 2** (Google's official MCP server) is the most secure and maintained choice.
+For most users, **start with Option 1** (Claude's built-in connector) if you're using Claude Desktop or claude.ai. If you need programmatic access in Claude Code, **Option 3** (a well-maintained community MCP server) is the current best choice — but **audit the code** before granting it email access. For full custom control, **Option 5** (direct Gmail API) gives you the most flexibility.
 
 ---
 
 *Research compiled: 2026-03-25*
-*Sources: Google Developers documentation, Anthropic support docs, MCP servers repository, community MCP registries*
+
+### Sources
+- Google: Choose Gmail API Scopes — developers.google.com/workspace/gmail/api/auth/scopes
+- Google: OAuth 2.0 for Google APIs — developers.google.com/identity/protocols/oauth2
+- Google: Gmail API Python Quickstart — developers.google.com/workspace/gmail/api/quickstart/python
+- Google Cloud Blog: Official MCP Support for Google Services — cloud.google.com/blog
+- Anthropic: Google Workspace Connectors — support.claude.com/en/articles/10166901
+- MCP Servers Repository — github.com/modelcontextprotocol/servers
+- taylorwilsdon/google_workspace_mcp — github.com/taylorwilsdon/google_workspace_mcp
+- GongRzhe/Gmail-MCP-Server — github.com/GongRzhe/Gmail-MCP-Server
